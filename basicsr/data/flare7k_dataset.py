@@ -14,6 +14,8 @@ import numpy as np
 import torch
 from basicsr.utils.registry import DATASET_REGISTRY
 
+from basicsr.utils.flare_util import jet
+
 class RandomGammaCorrection(object):
 	def __init__(self, gamma = None):
 		self.gamma = gamma
@@ -52,7 +54,7 @@ def glod_from_folder(folder_list, index_list):
 	return index_dict
 
 class Flare_Image_Loader(data.Dataset):
-	def __init__(self, image_path ,transform_base,transform_flare,mask_type=None):
+	def __init__(self, image_path ,transform_base,transform_flare,mask_type='jet'):
 		self.ext = ['png','jpeg','jpg','bmp','tif']
 		self.data_list=[]
 		[self.data_list.extend(glob.glob(image_path + '/*.' + e)) for e in self.ext]
@@ -149,6 +151,7 @@ class Flare_Image_Loader(data.Dataset):
 			luminance=0.3*flare_img[0]+0.59*flare_img[1]+0.11*flare_img[2]
 			threshold_value=0.99**gamma
 			flare_mask=torch.where(luminance >threshold_value, one, zero)
+			return {'gt': adjust_gamma_reverse(base_img),'flare': adjust_gamma_reverse(flare_img),'lq': adjust_gamma_reverse(merge_img),'mask': flare_mask,'gamma': gamma}
 
 		elif self.mask_type=="color":
 			one = torch.ones_like(base_img)
@@ -156,18 +159,37 @@ class Flare_Image_Loader(data.Dataset):
 
 			threshold_value=0.99**gamma
 			flare_mask=torch.where(merge_img >threshold_value, one, zero)
+			return {'gt': adjust_gamma_reverse(base_img),'flare': adjust_gamma_reverse(flare_img),'lq': adjust_gamma_reverse(merge_img),'mask': flare_mask,'gamma': gamma}
+
 		elif self.mask_type=="flare":
 			one = torch.ones_like(base_img)
 			zero = torch.zeros_like(base_img)
 
 			threshold_value=0.7**gamma
 			flare_mask=torch.where(flare_img >threshold_value, one, zero)
-		return {'gt': adjust_gamma_reverse(base_img),'flare': adjust_gamma_reverse(flare_img),'lq': adjust_gamma_reverse(merge_img),'mask': flare_mask,'gamma': gamma}
+			return {'gt': adjust_gamma_reverse(base_img),'flare': adjust_gamma_reverse(flare_img),'lq': adjust_gamma_reverse(merge_img),'mask': flare_mask,'gamma': gamma}
+		elif self.mask_type == 'jet':
+			# print(f'merge {merge_img.shape}')
+			
+			jetmap = jet(merge_img)
+			
+			luminance=0.299  * merge_img[0] + 0.587 * merge_img[1] + 0.114 * merge_img[2]
+			# print(f'jet {tonemap.shape}')
+   
+			one = torch.ones_like(base_img)
+			zero = torch.zeros_like(base_img)
+   
+			threshold_light=0.97**gamma
+   
+			flare_mask=torch.where(luminance >threshold_light, one, zero)
+
+			return {'gt': adjust_gamma_reverse(base_img),'flare': adjust_gamma_reverse(flare_img),'lq': adjust_gamma_reverse(merge_img),'mask': flare_mask,'jetmap': jetmap,'gamma': gamma}
 
 	def __len__(self):
 		return len(self.data_list)
 	
 	def load_scattering_flare(self,flare_name,flare_path):
+		print(flare_path)
 		flare_list=[]
 		[flare_list.extend(glob.glob(flare_path + '/*.' + e)) for e in self.ext]
 		self.flare_name_list.append(flare_name)

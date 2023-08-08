@@ -8,7 +8,7 @@ from skimage import morphology
 import torch
 import numpy as np
 
-
+import matplotlib.cm as cm
 _EPS=1e-7
 
 def get_args_from_json(json_file_path):
@@ -52,24 +52,27 @@ def adjust_gamma_reverse(image: torch.Tensor, gamma):
 
 def predict_flare_from_6_channel(input_tensor,gamma):
     #the input is a tensor in [B,C,H,W], the C here is 6
-
+    # pred
     deflare_img=input_tensor[:,:3,:,:]
+    # pred
     flare_img_predicted=input_tensor[:,3:,:,:]
-
+    # merged image  
     merge_img_predicted_linear=adjust_gamma(deflare_img,gamma)+adjust_gamma(flare_img_predicted,gamma)
     merge_img_predicted=adjust_gamma_reverse(torch.clamp(merge_img_predicted_linear, 1e-7, 1.0),gamma)
+    
+    #  pred   pred_flare  input ?????
     return deflare_img,flare_img_predicted,merge_img_predicted
 
-
-def predict_flare_from_3_channel(input_tensor,flare_mask,base_img,flare_img,merge_img,gamma):
+#                                (self.output, self.mask, self.gt, self.flare, self.lq, self.gamma)     
+def predict_flare_from_3_channel(input_tensor, flare_mask, base_img, flare_img, merge_img, gamma):
     #the input is a tensor in [B,C,H,W], the C here is 3
-    
+    # pred  and  pred_flare
     input_tensor_linear=adjust_gamma(input_tensor,gamma)
     merge_tensor_linear=adjust_gamma(merge_img,gamma)
     flare_img_predicted=adjust_gamma_reverse(torch.clamp(merge_tensor_linear-input_tensor_linear, 1e-7, 1.0),gamma)
 
-    masked_deflare_img=input_tensor*(1-flare_mask)+base_img*flare_mask
-    masked_flare_img_predicted=flare_img_predicted*(1-flare_mask)+flare_img*flare_mask
+    masked_deflare_img         =input_tensor*(1-flare_mask)       + base_img *flare_mask
+    masked_flare_img_predicted=flare_img_predicted*(1-flare_mask) + flare_img*flare_mask
     
     return masked_deflare_img,masked_flare_img_predicted
 
@@ -142,3 +145,21 @@ def blend_light_source(input_scene, pred_scene,threshold=0.99,luminance_mode=Fal
     else:
         blend = pred_scene
     return blend
+
+
+def jet(image):
+    #[3, 512, 512]) to [512, 512，3]
+    image = image.permute(1, 2, 0).numpy()
+    # print(f'before cm{image.shape}')
+    # tonemap = cv2.createTonemapMantiuk(1.8)
+    image = cm.jet(image)
+    image = image[ : , : , : , 0]
+    # print(f'after cm{image.shape}')
+    # image  = tonemap.process(image)
+    
+    image = torch.tensor(image, dtype=torch.float32)
+    image = image.permute(2, 0, 1) 
+    
+    # print(f'output cm{image.shape}')
+    # to [512, 512，3] to [3, 512, 512])
+    return image

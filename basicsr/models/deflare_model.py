@@ -52,6 +52,7 @@ class DeflareModel(SRModel):
         self.setup_schedulers()
 
     def feed_data(self, data):
+                
         self.lq = data['lq'].to(self.device)
         self.gt = data['gt'].to(self.device)
         if 'flare' in data:
@@ -59,10 +60,14 @@ class DeflareModel(SRModel):
             self.gamma = data['gamma'].to(self.device)
         if 'mask' in data:
             self.mask = data['mask'].to(self.device)
+        if 'jetmap' in data:
+            self.jetmap = data['jetmap'].to(self.device) #add_jetmap  
+            # print('jetmap was loaded.')
 
     def optimize_parameters(self, current_iter):
         self.optimizer_g.zero_grad()
-        self.output = self.net_g(self.lq)
+        self.output = self.net_g(self.lq, self.jetmap)
+        # self.output = self.net_g(self.lq)
         
         if self.output_ch==6:
             self.deflare,self.flare_hat,self.merge_hat=predict_flare_from_6_channel(self.output,self.gamma)
@@ -108,16 +113,16 @@ class DeflareModel(SRModel):
         if hasattr(self, 'net_g_ema'):
             self.net_g_ema.eval()
             with torch.no_grad():
-                self.output = self.net_g_ema(self.lq)
+                self.output = self.net_g_ema(self.lq,  self.jetmap)
         else:
             self.net_g.eval()
             with torch.no_grad():
-                self.output = self.net_g(self.lq)
+                self.output = self.net_g(self.lq, self.jetmap)
         if self.output_ch==6:
             self.deflare,self.flare_hat,self.merge_hat=predict_flare_from_6_channel(self.output,self.gamma)
         elif self.output_ch==3:
             self.mask=torch.zeros_like(self.lq).cuda() # Comment this line if you want to use the mask
-            self.deflare,self.flare_hat=predict_flare_from_3_channel(self.output,self.mask,self.gt,self.flare,self.lq,self.gamma)        
+            self.deflare,self.flare_hat=predict_flare_from_3_channel(self.output, self.mask, self.gt, self.flare, self.lq, self.gamma)        
         else:
             assert False, "Error! Output channel should be defined as 3 or 6."
         if not hasattr(self, 'net_g_ema'):
@@ -214,6 +219,7 @@ class DeflareModel(SRModel):
         self.blend= blend_light_source(self.lq, self.deflare, 0.97)
         out_dict['result']= self.blend.detach().cpu()
         out_dict['flare']=self.flare_hat.detach().cpu()
+        # out_dict['jetmap']=self.jetmap.detach().cpu()
         if hasattr(self, 'gt'):
             out_dict['gt'] = self.gt.detach().cpu()
         return out_dict
