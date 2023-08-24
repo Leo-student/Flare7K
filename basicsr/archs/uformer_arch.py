@@ -237,7 +237,7 @@ class ConvProjection(nn.Module):
         attn_kv = x if attn_kv is None else attn_kv
         x = rearrange(x, 'b (l w) c -> b c l w', l=l, w=w)
         attn_kv = rearrange(attn_kv, 'b (l w) c -> b c l w', l=l, w=w)
-        # print(attn_kv)
+        # # print(attn_kv)
         q = self.to_q(x)
         q = rearrange(q, 'b (h d) l w -> b h (l w) d', h=h)
         
@@ -350,6 +350,11 @@ class WindowAttention(nn.Module):
 
     def forward(self, x, attn_kv=None, mask=None):
         B_, N, C = x.shape
+        #DEBUG1
+        # print("0"*60)
+        # if (B_ == 4096):
+            # print('input shape {}'.format(x.shape))
+        
         q, k, v = self.qkv(x,attn_kv)
         q = q * self.scale
         attn = (q @ k.transpose(-2, -1))
@@ -361,22 +366,59 @@ class WindowAttention(nn.Module):
         relative_position_bias = repeat(relative_position_bias, 'nH l c -> nH l (c d)', d = ratio)
         
         attn = attn + relative_position_bias.unsqueeze(0)
-
+        # if (B_ == 4096):
+            # print("attn.SHAPE   {}".format(attn.shape))
         if mask is not None:
+            # nW = mask.shape[0]
+            # mask = repeat(mask, 'nW m n -> nW m (n d)',d = ratio)
+            # attn = attn.view(B_ // nW, nW, self.num_heads, N, N*ratio) + mask.unsqueeze(1).unsqueeze(0)
+            # attn = attn.view(-1, self.num_heads, N, N*ratio)
+            # attn = self.softmax(attn)
             nW = mask.shape[0]
-            mask = repeat(mask, 'nW m n -> nW m (n d)',d = ratio)
-            attn = attn.view(B_ // nW, nW, self.num_heads, N, N*ratio) + mask.unsqueeze(1).unsqueeze(0)
-            attn = attn.view(-1, self.num_heads, N, N*ratio)
+            attn_channel = attn.shape[0]
+            # if (B_ == 4096):
+                # print("=mask shape before {}".format(mask.shape))
+                # print('origin mask{}'.format(mask.unsqueeze(1).unsqueeze(0).shape))
+                # # print('origin  attention{}'.format(attn.view( nW //B_, nW, self.num_heads, N, N*ratio).shape))
+                
+          
+            mask = mask.view(attn_channel,-1, N, N*ratio)
+            # attn = attn.view(B_ // nW, nW, self.num_heads, N, N*ratio) + mask.unsqueeze(1).unsqueeze(0)
+            # if (B_ == 4096):
+                # print("=mask shape  atter{}".format(mask.shape))
+            attn = attn + mask
+            # if (B_ == 4096):    
+                # print('attn      {}'.format(attn.shape))
+                # print('mask      {}'.format(mask.shape)) 
+            # attn = attn.view(-1, self.num_heads, N, N*ratio)
+            
+            # print("add =======mask ==========={}".format(attn.shape))
             attn = self.softmax(attn)
         else:
             attn = self.softmax(attn)
+            # print("="*60)
+            # print(attn.shape)
+            # print("="*60)
+            # print("===========not mask=======")
 
         attn = self.attn_drop(attn)
-
-        x = (attn @ v).transpose(1, 2).reshape(B_, N, C)
+        # if (B_ == 4096):
+            # print('v.shape{}'.format(v.shape))
+        
+        # x = (attn @ v).transpose(1, 2).reshape(B_, N, C)
+        x = (attn @ v)
+        # if (B_ == 4096):
+            # print('x.shape{}'.format(x.shape))
+        x = x.transpose(1, 2)
+        # if (B_ == 4096):
+            # print('x.shape{}'.format(x.shape))
+        x = x.reshape(B_, N, C)
+        # if (B_ == 4096):
+            # print('x.shape{}'.format(x.shape))
         x = self.proj(x)
         x = self.se_layer(x)
         x = self.proj_drop(x)
+        del mask
         return x
 
     def extra_repr(self) -> str:
@@ -668,10 +710,27 @@ class LeWinTransformerBlock(nn.Module):
         ## input mask
         if mask != None:
             input_mask = F.interpolate(mask, size=(H,W)).permute(0,2,3,1)
+            # print(input_mask.shape)
+            #DEBUG0
+            # print('input_mask.shape in LeWinTransformer==================0============================\n')
             input_mask_windows = window_partition(input_mask, self.win_size) # nW, win_size, win_size, 1
+            
+            # print(input_mask_windows.shape)
+            # print('input_mask.shape in LeWinTransformer==================1============================\n')
+            
             attn_mask = input_mask_windows.view(-1, self.win_size * self.win_size) # nW, win_size*win_size
+            # print(attn_mask.shape)
+            # print('input_mask.shape in LeWinTransformer==================2============================\n')
+            #(nW, win_size * win_size, 1)  * (nW, 1, win_size * win_size) 
+            
             attn_mask = attn_mask.unsqueeze(2)*attn_mask.unsqueeze(1) # nW, win_size*win_size, win_size*win_size
+            # print(attn_mask.shape)
+            # weight for attention
+            # print('after unsqueeze.shape in LeWinTransformer==================3============================\n')
             attn_mask = attn_mask.masked_fill(attn_mask!=0, float(-100.0)).masked_fill(attn_mask == 0, float(0.0))
+            
+            # print(attn_mask.shape)
+            # print('attn_mask last in LeWinTransformer====================4==========================\n')
         else:
             attn_mask = None
 
@@ -902,7 +961,7 @@ class LeWinTransformer_CatCross(nn.Module):
       
         self.norm1 = norm_layer(dim)
         self.norm_kv = norm_layer(dim)
-        self.cross_attn = WindowAttention(
+        self .cross_attn = WindowAttention(
             dim, win_size=to_2tuple(self.win_size), num_heads=num_heads,qkv_bias=qkv_bias, 
             qk_scale=qk_scale, attn_drop=attn_drop, proj_drop=drop,token_projection='linear_concat')
 
