@@ -46,6 +46,9 @@ def demo(images_path,output_path,model_type,output_ch,pretrain_dir,flare7kpp_fla
     if not os.path.exists(output_path):
         os.makedirs(output_path)
     test_path=glob.glob(images_path)
+    
+    sorted_paths = sorted(test_path, key=lambda x: int(x.split('_')[-1].split('.')[0]))
+    
     result_path=output_path
     torch.cuda.empty_cache()
     if model_type=='Uformer':
@@ -58,7 +61,7 @@ def demo(images_path,output_path,model_type,output_ch,pretrain_dir,flare7kpp_fla
         assert False, "This model is not supported!!"
     to_tensor=transforms.ToTensor()
     resize=transforms.Resize((512,512)) #The output should in the shape of 128X
-    for i,image_path in tqdm(enumerate(test_path)):
+    for i,image_path in tqdm(enumerate(sorted_paths)):
         if not flare7kpp_flag:
             mkdir(result_path+"deflare/")
             deflare_path = result_path+"deflare/"+str(i).zfill(5)+"_deflare.png"
@@ -80,7 +83,7 @@ def demo(images_path,output_path,model_type,output_ch,pretrain_dir,flare7kpp_fla
             output_img=model(merge_img)
             #if ch is 6, first three channels are deflare image, others are flare image
             #if ch is 3, unsaturated region of output is the deflare image.
-            gamma=torch.Tensor([2.2])
+            gamma=torch.Tensor([2.0])
             if output_ch==6:
                 deflare_img,flare_img_predicted,merge_img_predicted=predict_flare_from_6_channel(output_img,gamma)
             elif output_ch==3:
@@ -94,7 +97,7 @@ def demo(images_path,output_path,model_type,output_ch,pretrain_dir,flare7kpp_fla
             if flare7kpp_flag:
                  torchvision.utils.save_image(deflare_img, blend_path)
             else:
-                blend_img= blend_light_source(merge_img, deflare_img, 0.97)
+                blend_img= blend_light_source(merge_img, deflare_img, 0.97, True)
                 torchvision.utils.save_image(deflare_img, deflare_path)
                 torchvision.utils.save_image(blend_img, blend_path)
        
