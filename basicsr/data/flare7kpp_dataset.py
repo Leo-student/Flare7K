@@ -12,6 +12,7 @@ from torch.distributions import Normal
 import torch
 import numpy as np
 import torch
+from basicsr.utils.flare_util import jet
 from basicsr.utils.registry import DATASET_REGISTRY
 
 class RandomGammaCorrection(object):
@@ -205,6 +206,24 @@ class Flare_Image_Loader(data.Dataset):
 			luminance=0.3*light_img[0]+0.59*light_img[1]+0.11*light_img[2]
 			threshold_value=0.01
 			flare_mask=torch.where(luminance >threshold_value, one, zero)
+		elif self.mask_type == 'jet':
+			# print(f'merge {merge_img.shape}')
+			
+			jetmap = jet(merge_img)
+			# print(jetmap.shape)
+			jetmap = jetmap[1].unsqueeze(0)
+			# print(jetmap.shape)
+			luminance=0.299  * merge_img[0] + 0.587 * merge_img[1] + 0.114 * merge_img[2]
+			# print(f'jet {tonemap.shape}')
+   
+			one = torch.ones_like(base_img)
+			zero = torch.zeros_like(base_img)
+   
+			threshold_light=0.97**gamma
+   
+			flare_mask=torch.where(luminance >threshold_light, one, zero)
+
+			return {'gt': adjust_gamma_reverse(base_img),'flare': adjust_gamma_reverse(flare_img),'lq': adjust_gamma_reverse(merge_img),'mask': flare_mask,'jetmap': jetmap,'gamma': gamma}
 		return {'gt': adjust_gamma_reverse(base_img),'flare': adjust_gamma_reverse(flare_img),'lq': adjust_gamma_reverse(merge_img),'mask': flare_mask,'gamma': gamma}
 
 	def __len__(self):
