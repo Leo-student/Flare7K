@@ -46,7 +46,13 @@ class DeflareModel(SRModel):
         # define losses
         self.l1_pix = build_loss(train_opt['l1_opt']).to(self.device)
         self.l_perceptual = build_loss(train_opt['perceptual']).to(self.device)
+        # define orth norm
+        self.orth = build_loss(train_opt['orth']).to(self.device)
 
+        self.mask = None
+        self.jetmap = None
+        
+        
         # set up optimizers and schedulers
         self.setup_optimizers()
         self.setup_schedulers()
@@ -66,9 +72,13 @@ class DeflareModel(SRModel):
 
     def optimize_parameters(self, current_iter):
         self.optimizer_g.zero_grad()
-        self.output = self.net_g(self.lq, self.jetmap)
-        # self.output = self.net_g(self.lq)
-        
+        # if self.mask is not None:
+        #     self.output = self.net_g(self.lq, mask = self.mask)
+        if self.jetmap is not  None:
+            self.output = self.net_g(self.lq, mask = self.jetmap)
+        else :
+            self.output = self.net_g(self.lq)
+        # print(self.output.shape, "--------------------output size ")
         if self.output_ch==6:
             self.deflare,self.flare_hat,self.merge_hat=predict_flare_from_6_channel(self.output,self.gamma)
         elif self.output_ch==3:
@@ -101,6 +111,13 @@ class DeflareModel(SRModel):
         loss_dict['l_vgg_base'] = l_vgg_base
         loss_dict['l_vgg_flare'] = l_vgg_flare
 
+        #orth norm
+        l_orth = self.orth(self.net_g.moule.decoderlayer_1.projection_2.subnet.blocks[0].block[2].weight)
+        loss_dict['l_orth'] = l_orth
+        l_total += l_orth
+
+
+
         l_total.backward()
         self.optimizer_g.step()
 
@@ -113,11 +130,17 @@ class DeflareModel(SRModel):
         if hasattr(self, 'net_g_ema'):
             self.net_g_ema.eval()
             with torch.no_grad():
-                self.output = self.net_g_ema(self.lq,  self.jetmap)
+                self.output = self.net_g_ema(self.lq,  mask = self.jetmap)
         else:
             self.net_g.eval()
             with torch.no_grad():
-                self.output = self.net_g(self.lq, self.jetmap)
+                # if self.mask is  not None:
+                #     self.output = self.net_g(self.lq, mask =  self.mask)
+                if self.jetmap is not  None:
+                    self.output = self.net_g(self.lq, mask =  self.jetmap)
+                else :
+                    self.output = self.net_g(self.lq)
+                    
         if self.output_ch==6:
             self.deflare,self.flare_hat,self.merge_hat=predict_flare_from_6_channel(self.output,self.gamma)
         elif self.output_ch==3:
@@ -153,7 +176,6 @@ class DeflareModel(SRModel):
         for idx, val_data in enumerate(dataloader):
             self.feed_data(val_data)
             self.test()
-
             visuals = self.get_current_visuals()
             sr_img = tensor2img([visuals['result']])
             metric_data['img'] = sr_img
@@ -183,15 +205,20 @@ class DeflareModel(SRModel):
             if with_metrics:
                 # calculate metrics
                 for name, opt_ in self.opt['val']['metrics'].items():
+                    # print('-'*5)
                     self.metric_results[name] += calculate_metric(metric_data, opt_)
+                    # self.metric_results[name] += calculate_metric(metric_data, opt_)
+                    # print(name, opt_,self.metric_results[name])
+                    # print('-'*5)
             if use_pbar:
                 pbar.update(1)
                 pbar.set_description(f'Test {img_name}')
-        if use_pbar:
-            pbar.close()
+            if use_pbar:
+                pbar.close()
 
         if with_metrics:
             for metric in self.metric_results.keys():
+                # print(idx + 1,self.metric_results[metric] )
                 self.metric_results[metric] /= (idx + 1)
                 # update the best metric result
                 self._update_best_metric_result(dataset_name, metric, self.metric_results[metric], current_iter)
@@ -219,7 +246,8 @@ class DeflareModel(SRModel):
         self.blend= blend_light_source(self.lq, self.deflare, 0.97)
         out_dict['result']= self.blend.detach().cpu()
         out_dict['flare']=self.flare_hat.detach().cpu()
-        # out_dict['jetmap']=self.jetmap.detach().cpu()
+        # if hasattr(self, 'jetmap'):
+        #     out_dict['jetmap']=self.jetmap.detach().cpu()
         if hasattr(self, 'gt'):
             out_dict['gt'] = self.gt.detach().cpu()
         return out_dict
