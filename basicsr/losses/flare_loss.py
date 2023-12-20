@@ -4,6 +4,7 @@ import torch
 from torch import abs_, nn
 from torch import optim
 from PIL import Image
+import torch.nn.functional as F
 from typing import Mapping,Sequence,Tuple,Union
 from torchvision.models import vgg19
 import torchvision.models.vgg as vgg
@@ -144,11 +145,13 @@ class Orth_conv_dist(nn.Module):
         self.loss_weight=loss_weight
 
     def forward(self, kernel):
-       [o_c, i_c, w, h] = kernel.shape
+        [o_c, i_c, w, h] = kernel.shape
         assert (w == h),"Do not support rectangular kernel"
         #half = np.floor(w/2)
         assert self.stride < w,"Please use matrix orthgonality instead"
+        
         new_s = self.stride*(w-1) + w#np.int(2*(half+np.floor(half/stride))+1)
+        
         temp = torch.eye(new_s*new_s*i_c).reshape((new_s*new_s*i_c, i_c, new_s,new_s)).cuda()
         out = (F.conv2d(temp, kernel, stride = self.stride)).reshape((new_s*new_s*i_c, -1))
         Vmat = out[np.floor(new_s**2/2).astype(int)::new_s**2, :]

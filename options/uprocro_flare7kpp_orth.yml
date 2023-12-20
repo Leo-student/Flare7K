@@ -3,7 +3,7 @@
 # basicsr/train.py --local_rank=0 -opt options/uformer_flare7k_noreflection_option.yml --launcher pytorch
 
 # general settings
-name: Upro_36ch_flare7kpp_1108_from_st_norm
+name: Upro_36ch_flare7kpp_1204_from_st_norm_0123_0p01
 model_type: DeflareModel
 scale: 1
 num_gpu: 1  # set num_gpu: 0 for cpu mode
@@ -15,14 +15,14 @@ datasets:
     type: Flare7kpp_Pair_Loader
     image_path: dataset/Flickr24K
     scattering_dict:
-      Flare7k_scattering: /home/lianjz/Desktop/WorkStation/Flare7K/dataset/Flare7K/Scattering_Flare/Compound_Flare
-      Real_scattering1: /home/lianjz/Desktop/WorkStation/Flare7K/dataset/Flare-R/Compound_Flare
+      Flare7k_scattering: /home/lianjz/Desktop/workspace/Flare7K/dataset/Flare7K/Scattering_Flare/Compound_Flare
+      Real_scattering1: /home/lianjz/Desktop/workspace/Flare7K/dataset/Flare-R/Compound_Flare
     reflective_dict: 
-      Flare7k_reflective: /home/lianjz/Desktop/WorkStation/Flare7K/dataset/Flare7K/Reflective_Flare
+      Flare7k_reflective: /home/lianjz/Desktop/workspace/Flare7K/dataset/Flare7K/Reflective_Flare
       Real_reflective1: ~
     light_dict:
-      Flare7k_light: /home/lianjz/Desktop/WorkStation/Flare7K/dataset/Flare7K/Scattering_Flare/Light_Source
-      Real_light1: /home/lianjz/Desktop/WorkStation/Flare7K/dataset/Flare-R/Light_Source
+      Flare7k_light: /home/lianjz/Desktop/workspace/Flare7K/dataset/Flare7K/Scattering_Flare/Light_Source
+      Real_light1: /home/lianjz/Desktop/workspace/Flare7K/dataset/Flare-R/Light_Source
     data_ratio: [0.5, 0.5] # or [0.6, 0.4], only a ratio is enough
     transform_base:
       img_size: 512
@@ -40,7 +40,7 @@ datasets:
     use_shuffle: true
     num_worker_per_gpu: 4
     batch_size_per_gpu: 1
-    dataset_enlarge_ratio: 1
+    dataset_enlarge_ratio: 2
     prefetch_mode: cuda   #[None, 'cuda', 'cpu']
 
   # Validation data is not provided in our Flare7K dataset, you can generate by yourself
@@ -48,9 +48,9 @@ datasets:
     name: flarekpp_test
     type: Image_Pair_Loader
     # type: ImageMask_Pair_Loader
-    dataroot_gt: /home/lianjz/Desktop/WorkStation/Flare7K/dataset/Flare7K/valid/gt
-    dataroot_lq: /home/lianjz/Desktop/WorkStation/Flare7K/dataset/Flare7K/valid/input
-    # dataroot_mask: /home/lianjz/Desktop/WorkStation/Flare7K/dataset/Flare7K/valid/mask
+    dataroot_gt: /home/lianjz/Desktop/workspace/Flare7K/dataset/Flare7K/valid/gt
+    dataroot_lq: /home/lianjz/Desktop/workspace/Flare7K/dataset/Flare7K/valid/input
+    # dataroot_mask: /home/lianjz/Desktop/workspace/Flare7K/dataset/Flare7K/valid/mask
     gt_size: 512
 
 # network structures
@@ -82,7 +82,7 @@ train:
     gamma: 0.5
 
   ema_decay: 0.9
-  total_iter: 400000
+  total_iter: 1200000
   warmup_iter: -1  # no warm up
 
   # losses
@@ -98,7 +98,7 @@ train:
   orth:
     type: Orth_dist
     stride: 1
-    loss_weight: 1
+    loss_weight: 0.01
 
   # orth:
     # type: Orth_conv_dist

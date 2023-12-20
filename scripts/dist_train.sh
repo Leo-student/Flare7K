@@ -12,5 +12,5 @@ if [ $# -lt 2 ] ;then
 fi
 
 PYTHONPATH="$(dirname $0)/..:${PYTHONPATH}" \
-python -m torch.distributed.launch --nproc_per_node=$GPUS --master_port=$PORT \
-    basicsr/train.py -opt $CONFIG --launcher pytorch ${@:3}
+python -m torch.distributed.run --nproc_per_node=$GPUS  --master_port=$PORT \
+    basicsr/train.py -opt $CONFIG --launcher pytorch ${@:3} 
